@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>娜娜的工程质量监督Agent</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部标题栏 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="logo-icon">
+                        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="white"/>
+                            <path d="M12 6.5c.5-1 1.5-2.5 3-2.5" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+                            <circle cx="7.5" cy="8" r="1.5" fill="rgba(255,255,255,0.6)"/>
+                            <circle cx="16.5" cy="8" r="1.5" fill="rgba(255,255,255,0.6)"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1>🌸 娜娜的工程质量监督Agent</h1>
+                        <p class="subtitle">输入现场巡视问题 · 自动匹配规章制度条款 · 生成整改通知书</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="header-stats" id="headerStats">
+                        <div class="stat-item">
+                            <span class="stat-value" id="statRegulations">--</span>
+                            <span class="stat-label">规范数</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="statClauses">--</span>
+                            <span class="stat-label">条款数</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="statCategories">--</span>
+                            <span class="stat-label">分类数</span>
+                        </div>
+                    </div>
+                    <button class="btn-ai-config" onclick="openAIConfigModal()" title="大模型API配置">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span class="btn-ai-config-label">API配置</span>
+                        <span class="ai-status-dot" id="aiStatusDotHeader"></span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 导航标签 -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="match">
+                <span class="tab-icon">🌸</span> 问题匹配
+            </button>
+            <button class="tab-btn" data-tab="database">
+                <span class="tab-icon">📚</span> 规章制度库
+            </button>
+            <button class="tab-btn" data-tab="notice">
+                <span class="tab-icon">🍰</span> 通知书生成
+            </button>
+            <button class="tab-btn" data-tab="ai">
+                <span class="tab-icon">🧁</span> AI设置
+                <span class="ai-status-dot" id="aiStatusDot"></span>
+            </button>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 问题匹配 Tab -->
+            <section class="tab-panel active" id="tab-match">
+                <div class="panel-grid">
+                    <!-- 左侧：问题输入 -->
+                    <div class="panel-left">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>现场问题描述</h2>
+                                <button class="btn btn-sm btn-outline" onclick="clearProblem()">清空</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label>问题描述 <span class="required">*</span></label>
+                                    <textarea id="problemInput" class="form-control textarea-lg"
+                                        placeholder="请输入现场巡视发现的问题，例如：&#10;&#10;管线穿越防火隔墙时部分孔洞缺防火封堵&#10;部分明敷消防管缺防火保护&#10;消火栓未通水&#10;挡烟垂壁未安装"
+                                        rows="8"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>问题位置（选填）</label>
+                                    <input type="text" id="locationInput" class="form-control"
+                                        placeholder="如：9号楼2楼西楼梯间">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group" style="flex:1">
+                                        <label>返回匹配数量</label>
+                                        <select id="topNSelect" class="form-control">
+                                            <option value="3">3条</option>
+                                            <option value="5" selected>5条</option>
+                                            <option value="10">10条</option>
+                                            <option value="20">20条</option>
+                                            <option value="30">30条</option>
+                                            <option value="50">50条</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="flex:1">
+                                        <label>匹配模式</label>
+                                        <select id="matchModeSelect" class="form-control">
+                                            <option value="keyword" selected>关键词匹配</option>
+                                            <option value="ai">AI智能匹配</option>
+                                            <option value="hybrid">混合模式（推荐）</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="display:flex;align-items:flex-end">
+                                        <button class="btn btn-primary btn-lg" onclick="matchProblem()" id="matchBtn">
+                                            <span class="btn-icon">🔍</span> 开始匹配
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 内联AI状态条 -->
+                                <div class="ai-inline-status" id="aiInlineStatus">
+                                    <div class="ai-inline-status-left">
+                                        <span class="ai-inline-dot" id="aiInlineDot"></span>
+                                        <span class="ai-inline-text" id="aiInlineText">AI未配置</span>
+                                    </div>
+                                    <button class="btn btn-xs btn-outline" onclick="openAIConfigModal()">配置API Key</button>
+                                </div>
+
+                                <!-- 示例问题 -->
+                                <div class="example-box">
+                                    <div class="example-title">
+                                        <span>💡 示例问题</span>
+                                        <button class="btn btn-xs btn-link" onclick="loadExample()">加载示例</button>
+                                    </div>
+                                    <div class="example-list" id="exampleList">
+                                        <div class="example-item" onclick="useExample(this)">管线穿越防火隔墙时部分孔洞缺防火封堵</div>
+                                        <div class="example-item" onclick="useExample(this)">部分明敷消防管缺防火保护</div>
+                                        <div class="example-item" onclick="useExample(this)">消防电缆与非消防电缆多处共管共桥架敷设</div>
+                                        <div class="example-item" onclick="useExample(this)">应急照明箱故障，部分楼层应急照明回路断电</div>
+                                        <div class="example-item" onclick="useExample(this)">裙房部分消火栓未通水</div>
+                                        <div class="example-item" onclick="useExample(this)">消火栓箱内部缺水龙带</div>
+                                        <div class="example-item" onclick="useExample(this)">公共通道顶部部分线缆未穿阻燃管保护</div>
+                                        <div class="example-item" onclick="useExample(this)">疏散门净宽度小于1.4m</div>
+                                        <div class="example-item" onclick="useExample(this)">值班间与门厅之间隔墙上的窗未采用防火窗</div>
+                                        <div class="example-item" onclick="useExample(this)">疏散楼梯间内不应设置其他房间</div>
+                                        <div class="example-item" onclick="useExample(this)">楼梯间外墙窗与相邻的窗之间距离不足1m</div>
+                                        <div class="example-item" onclick="useExample(this)">挡烟垂壁未安装</div>
+                                        <div class="example-item" onclick="useExample(this)">5、6层未采用减压栓</div>
+                                        <div class="example-item" onclick="useExample(this)">部分管道支架设置不符合规范要求</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：匹配结果 -->
+                    <div class="panel-right">
+                        <div class="card result-card">
+                            <div class="card-header">
+                                <h2>🌸 匹配结果</h2>
+                                <div class="header-actions">
+                                    <button class="btn btn-xs btn-cute" onclick="addAllMatchesToNotice()" id="addAllMatchesBtn" style="display:none">✨ 生成通知书模板</button>
+                                    <button class="btn btn-xs btn-outline" onclick="aiAnalyze()" id="aiAnalyzeBtn" style="display:none">🤖 AI分析</button>
+                                    <span class="result-count" id="resultCount"></span>
+                                </div>
+                            </div>
+                            <div class="card-body" id="matchResults">
+                                <div class="empty-state">
+                                    <div class="empty-icon">🔍</div>
+                                    <p>请输入问题描述后点击"开始匹配"</p>
+                                    <p class="empty-hint">系统将自动从规章制度库中查找匹配的条款</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 规章制度库 Tab -->
+            <section class="tab-panel" id="tab-database">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🌷 规章制度库</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-sm btn-primary" onclick="showImportModal()">📥 导入规范</button>
+                            <button class="btn btn-sm btn-outline" onclick="showAddModal()">➕ 添加规范</button>
+                            <button class="btn btn-sm btn-outline" onclick="downloadTemplate()">📄 下载模板</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 在线搜索 / PDF导入 面板 -->
+                        <div class="search-import-panel">
+                            <div class="search-import-tabs">
+                                <button class="search-import-tab active" onclick="switchSearchImportTab('web')">🌐 在线搜索法律条文</button>
+                                <button class="search-import-tab" onclick="switchSearchImportTab('pdf')">📑 PDF导入</button>
+                                <button class="search-import-tab" onclick="switchSearchImportTab('manual')">✏️ 手动粘贴</button>
+                            </div>
+
+                            <!-- 在线搜索 -->
+                            <div class="search-import-content active" id="searchImport-web">
+                                <div class="form-row">
+                                    <div class="form-group" style="flex:1;margin-bottom:0">
+                                        <input type="text" id="webSearchInput" class="form-control"
+                                            placeholder="输入规范名称或关键词，如：建筑防火通用规范 防火封堵"
+                                            onkeydown="if(event.key==='Enter')searchWebRegulation()">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="searchWebRegulation()" id="webSearchBtn">🔍 搜索</button>
+                                </div>
+                                <div id="webSearchResults" style="margin-top:14px"></div>
+                                <div id="webSearchParsed" style="margin-top:14px;display:none">
+                                    <div class="modal-hint">💡 已解析出以下规范信息，确认无误后点击“添加到库”</div>
+                                    <div id="webSearchParsedContent"></div>
+                                    <div class="modal-footer" style="justify-content:flex-start;margin-top:10px">
+                                        <button class="btn btn-primary" onclick="addSearchedRegulation()">✨ 添加到库</button>
+                                        <button class="btn btn-outline" onclick="document.getElementById('webSearchParsed').style.display='none'">取消</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PDF导入 -->
+                            <div class="search-import-content" id="searchImport-pdf">
+                                <!-- 解析模式选择 -->
+                                <div class="pdf-mode-selector">
+                                    <label class="pdf-mode-label">解析模式：</label>
+                                    <label class="pdf-mode-option">
+                                        <input type="radio" name="pdfMode" value="normal" checked onchange="onPdfModeChange()">
+                                        <span>⚡ 快速提取</span>
+                                    </label>
+                                    <label class="pdf-mode-option">
+                                        <input type="radio" name="pdfMode" value="deep" onchange="onPdfModeChange()">
+                                        <span>🤖 AI深度解析<span class="pdf-mode-hint">（提取全部条款）</span></span>
+                                    </label>
+                                </div>
+
+                                <div class="pdf-upload-area" id="pdfUploadArea"
+                                    onclick="document.getElementById('pdfFileInput').click()"
+                                    ondragover="handlePdfDrag(event)"
+                                    ondragleave="handlePdfDragLeave(event)"
+                                    ondrop="handlePdfDrop(event)">
+                                    <div class="pdf-upload-icon">📑</div>
+                                    <div class="pdf-upload-text">点击或拖拽 PDF 文件到此处</div>
+                                    <div class="pdf-upload-hint" id="pdfUploadHint">支持整篇PDF上传，自动提取全部条文并解析</div>
+                                    <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="handlePdfUpload(event)">
+                                </div>
+
+                                <!-- 解析进度条 + 终止按钮 -->
+                                <div id="pdfProgress" style="display:none;margin-top:14px;text-align:center">
+                                    <div class="pdf-progress-bar">
+                                        <div class="pdf-progress-fill" id="pdfProgressFill"></div>
+                                    </div>
+                                    <div class="pdf-progress-text" id="pdfProgressText">正在解析...</div>
+                                    <!-- 终止按钮由JS动态注入 -->
+                                </div>
+
+                                <div id="pdfUploadStatus" style="margin-top:14px"></div>
+                                <div id="pdfParsedResult" style="margin-top:14px;display:none">
+                                    <div class="modal-hint" id="pdfParsedHint">💡 已解析出以下规范信息，确认无误后点击"添加到库"</div>
+                                    <div id="pdfParsedContent"></div>
+                                    <div class="modal-footer" style="justify-content:flex-start;margin-top:10px">
+                                        <button class="btn btn-primary" onclick="addPdfRegulation()">✨ 全部收录到库</button>
+                                        <button class="btn btn-outline" onclick="document.getElementById('pdfParsedResult').style.display='none'">取消</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 手动粘贴 -->
+                            <div class="search-import-content" id="searchImport-manual">
+                                <div class="modal-hint">直接粘贴规范条文文本，AI会尝试解析成结构化数据（需配置LLM）</div>
+                                <textarea id="manualRegText" class="form-control textarea-lg" rows="6"
+                                    placeholder="粘贴规范名称、编号和条款内容..."></textarea>
+                                <div class="modal-footer" style="justify-content:flex-start;margin-top:12px">
+                                    <button class="btn btn-primary" onclick="parseManualRegulation()" id="manualParseBtn">🔮 AI解析</button>
+                                </div>
+                                <div id="manualParsedResult" style="margin-top:14px;display:none">
+                                    <div id="manualParsedContent"></div>
+                                    <div class="modal-footer" style="justify-content:flex-start;margin-top:10px">
+                                        <button class="btn btn-primary" onclick="addManualRegulation()">✨ 添加到库</button>
+                                        <button class="btn btn-outline" onclick="document.getElementById('manualParsedResult').style.display='none'">取消</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="search-bar">
+                            <input type="text" id="regSearchInput" class="form-control"
+                                placeholder="🔍 搜索规范名称或编号..." oninput="searchRegulations()">
+                            <button class="btn btn-sm btn-outline" onclick="selectAllRegulations()" style="margin-left:8px;white-space:nowrap">☑ 全选</button>
+                        </div>
+
+                        <!-- 批量操作浮动栏 -->
+                        <div class="batch-action-bar" id="batchActionBar" style="display:none">
+                            <span class="batch-count">已选择 <b id="batchSelectedCount">0</b> 项</span>
+                            <button class="btn btn-sm btn-danger" onclick="batchDeleteRegulations()">🗑️ 批量删除</button>
+                            <button class="btn btn-sm btn-outline" onclick="selectAllRegulations()">取消选择</button>
+                        </div>
+
+                        <div class="regulation-list" id="regulationList">
+                            <div class="loading-state">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 规范详情弹窗 -->
+                <div class="modal" id="regDetailModal" style="display:none">
+                    <div class="modal-content modal-lg">
+                        <div class="modal-header">
+                            <h3 id="modalRegName"></h3>
+                            <button class="modal-close" onclick="closeModal('regDetailModal')">&times;</button>
+                        </div>
+                        <div class="modal-body" id="modalRegBody"></div>
+                    </div>
+                </div>
+
+                <!-- 导入弹窗 -->
+                <div class="modal" id="importModal" style="display:none">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>导入规章制度</h3>
+                            <button class="modal-close" onclick="closeModal('importModal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="modal-hint">请粘贴JSON格式的规章制度数据，格式可参考"下载模板"。</p>
+                            <textarea id="importTextarea" class="form-control textarea-lg"
+                                placeholder='{"regulations": [...]}' rows="12"></textarea>
+                            <div class="modal-footer">
+                                <button class="btn btn-outline" onclick="closeModal('importModal')">取消</button>
+                                <button class="btn btn-primary" onclick="importRegulations()">确认导入</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 添加规范弹窗 -->
+                <div class="modal" id="addModal" style="display:none">
+                    <div class="modal-content modal-lg">
+                        <div class="modal-header">
+                            <h3>添加规章制度</h3>
+                            <button class="modal-close" onclick="closeModal('addModal')">&times;</button>
+                        </div>
+                        <div class="modal-body" id="addModalBody"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 通知书生成 Tab -->
+            <section class="tab-panel" id="tab-notice">
+                <div class="panel-grid">
+                    <!-- 左侧：工程信息 + 问题列表 -->
+                    <div class="panel-left">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>工程信息</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label>工程名称</label>
+                                    <input type="text" id="projectName" class="form-control"
+                                        placeholder="如：南通职业大学搬迁建设三期工程">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group" style="flex:1">
+                                        <label>监督注册号</label>
+                                        <input type="text" id="supervisionNo" class="form-control" placeholder="监督注册号">
+                                    </div>
+                                    <div class="form-group" style="flex:1">
+                                        <label>抽查日期</label>
+                                        <input type="date" id="inspectionDate" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>建设单位</label>
+                                    <input type="text" id="constructionUnit" class="form-control" placeholder="建设单位名称">
+                                </div>
+                                <div class="form-group">
+                                    <label>监理单位</label>
+                                    <input type="text" id="supervisionUnit" class="form-control" placeholder="监理单位名称">
+                                </div>
+                                <div class="form-group">
+                                    <label>施工单位</label>
+                                    <input type="text" id="constructionCompany" class="form-control" placeholder="施工单位名称">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card" style="margin-top:16px">
+                            <div class="card-header">
+                                <h2>问题清单</h2>
+                                <button class="btn btn-sm btn-primary" onclick="addProblemRow()">+ 添加问题</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="problemList"></div>
+                                <p class="empty-hint" id="problemListEmpty">点击"+ 添加问题"开始添加现场发现的问题</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：通知书预览 -->
+                    <div class="panel-right">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>🍰 整改通知书预览</h2>
+                                <div class="header-actions">
+                                    <button class="btn btn-sm btn-mint" onclick="generateNotice()" id="generateBtn">✨ 生成通知书</button>
+                                    <button class="btn btn-sm btn-lavender" onclick="aiPolishNotice()" id="polishBtn" style="display:none">🤖 AI润色</button>
+                                    <button class="btn btn-sm btn-outline" onclick="copyNotice()" id="copyBtn" style="display:none">📋 复制文本</button>
+                                    <button class="btn btn-sm btn-primary" onclick="exportNotice('word')" id="exportWordBtn" style="display:none">📄 导出Word</button>
+                                    <button class="btn btn-sm btn-cute" onclick="exportNotice('pdf')" id="exportPdfBtn" style="display:none">📑 导出PDF</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="noticePreview" class="notice-preview">
+                                    <div class="empty-state">
+                                        <div class="empty-icon">📋</div>
+                                        <p>填写工程信息并添加问题后，点击"生成通知书"</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI二次复核弹窗 -->
+            <div class="modal" id="aiReviewModal" style="display:none">
+                <div class="modal-content modal-lg">
+                    <div class="modal-header">
+                        <h3>🧁 AI二次复核</h3>
+                        <button class="modal-close" onclick="closeModal('aiReviewModal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="modal-hint">AI正在复核：1）问题与条文对应是否正确  2）是否存在 typo</div>
+                        <div id="aiReviewContent">
+                            <div class="loading-state">AI正在复核中...</div>
+                        </div>
+                        <div class="review-actions" id="aiReviewActions" style="display:none">
+                            <button class="btn btn-outline" onclick="closeModal('aiReviewModal')">返回修改</button>
+                            <button class="btn btn-primary" onclick="confirmGenerateAfterReview()">✨ 确认生成</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <section class="tab-panel" id="tab-ai">
+                <div class="panel-grid">
+                    <!-- 左侧：LLM配置 -->
+                    <div class="panel-left">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>大模型配置</h2>
+                                <div class="header-actions">
+                                    <label class="switch-label">
+                                        <input type="checkbox" id="llmEnabledToggle" onchange="toggleLLM()">
+                                        <span class="switch"></span>
+                                        <span class="switch-text">启用AI</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label>选择大模型提供商</label>
+                                    <select id="llmProviderSelect" class="form-control" onchange="onProviderChange()">
+                                        <option value="">-- 请选择 --</option>
+                                    </select>
+                                </div>
+
+                                <div id="providerInfo" class="provider-info" style="display:none">
+                                    <div class="provider-info-row">
+                                        <span class="provider-info-label">获取API Key：</span>
+                                        <a id="providerDocUrl" href="#" target="_blank" class="provider-info-link">点击前往</a>
+                                    </div>
+                                    <div id="providerNote" class="provider-info-note"></div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>API Key</label>
+                                    <input type="password" id="llmApiKey" class="form-control"
+                                        placeholder="请输入API Key" autocomplete="off">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>模型</label>
+                                    <select id="llmModelSelect" class="form-control">
+                                        <option value="">请先选择提供商</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group" style="flex:1">
+                                        <label>Temperature (0-1)</label>
+                                        <input type="number" id="llmTemperature" class="form-control"
+                                            value="0.3" min="0" max="1" step="0.1">
+                                    </div>
+                                    <div class="form-group" style="flex:1">
+                                        <label>Max Tokens</label>
+                                        <input type="number" id="llmMaxTokens" class="form-control"
+                                            value="2048" min="256" max="8192" step="256">
+                                    </div>
+                                </div>
+
+                                <div class="form-row" style="margin-top:8px">
+                                    <button class="btn btn-outline" onclick="testLLMConnection()" id="testBtn">
+                                        🔗 测试连接
+                                    </button>
+                                    <button class="btn btn-primary" onclick="saveLLMConfig()">
+                                        💾 保存配置
+                                    </button>
+                                </div>
+
+                                <div id="testResult" class="test-result" style="display:none"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：功能说明 + 当前状态 -->
+                    <div class="panel-right">
+                        <div class="card" style="margin-bottom:16px">
+                            <div class="card-header">
+                                <h2>当前状态</h2>
+                            </div>
+                            <div class="card-body" id="llmStatusPanel">
+                                <div class="loading-state">加载中...</div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>AI功能说明</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="ai-feature-list">
+                                    <div class="ai-feature-item">
+                                        <div class="ai-feature-icon">🌸</div>
+                                        <div>
+                                            <div class="ai-feature-title">AI智能匹配</div>
+                                            <div class="ai-feature-desc">将问题描述发送给大模型，AI理解语义后从规范库中找出最匹配的条款，弥补关键词匹配的局限。</div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-feature-item">
+                                        <div class="ai-feature-icon">🍡</div>
+                                        <div>
+                                            <div class="ai-feature-title">混合模式</div>
+                                            <div class="ai-feature-desc">先执行关键词匹配，当匹配度低于80%时自动调用AI增强，兼顾速度与准确率。</div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-feature-item">
+                                        <div class="ai-feature-icon">🧁</div>
+                                        <div>
+                                            <div class="ai-feature-title">AI问题分析</div>
+                                            <div class="ai-feature-desc">对现场问题进行深度分析，包括问题性质、安全隐患、整改建议和验收要点。</div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-feature-item">
+                                        <div class="ai-feature-icon">✨</div>
+                                        <div>
+                                            <div class="ai-feature-title">AI通知书润色</div>
+                                            <div class="ai-feature-desc">使用大模型对生成的整改通知书进行语言润色，提升文书的专业性和规范性。</div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-feature-item">
+                                        <div class="ai-feature-icon">🍰</div>
+                                        <div>
+                                            <div class="ai-feature-title">AI二次复核</div>
+                                            <div class="ai-feature-desc">生成通知书前，AI自动检查问题-条款对应是否正确，并排查错别字等typo。</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>🌸 娜娜的工程质量监督Agent · 内置规章制度数据库 · 支持自定义导入</p>
+        </footer>
+    </div>
+
+    <!-- 提示消息 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 全局AI配置弹窗 -->
+    <div class="modal" id="aiConfigModal" style="display:none">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>🤖 大模型API配置</h3>
+                <button class="modal-close" onclick="closeAIConfigModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 提供商选择卡片 -->
+                <div class="provider-cards" id="providerCards">
+                    <div class="provider-card" data-provider="deepseek" onclick="selectProviderInModal('deepseek')">
+                        <div class="provider-card-icon">🐋</div>
+                        <div class="provider-card-name">DeepSeek</div>
+                        <div class="provider-card-desc">V4 Pro 旗舰 · V3 · R1</div>
+                    </div>
+                    <div class="provider-card" data-provider="zhipu" onclick="selectProviderInModal('zhipu')">
+                        <div class="provider-card-icon">🧠</div>
+                        <div class="provider-card-name">智谱GLM</div>
+                        <div class="provider-card-desc">GLM-5.2 旗舰 · 5 · 4-Plus</div>
+                    </div>
+                    <div class="provider-card" data-provider="minimax" onclick="selectProviderInModal('minimax')">
+                        <div class="provider-card-icon">🎯</div>
+                        <div class="provider-card-name">MiniMax</div>
+                        <div class="provider-card-desc">M1 旗舰 · Text-01</div>
+                    </div>
+                    <div class="provider-card" data-provider="doubao" onclick="selectProviderInModal('doubao')">
+                        <div class="provider-card-icon">🫘</div>
+                        <div class="provider-card-name">豆包</div>
+                        <div class="provider-card-desc">1.5-Pro 旗舰 · 256k 长文本</div>
+                    </div>
+                </div>
+
+                <!-- 选中提供商信息 -->
+                <div id="modalProviderInfo" class="provider-info" style="display:none;margin-top:16px">
+                    <div class="provider-info-row">
+                        <span class="provider-info-label">获取API Key：</span>
+                        <a id="modalProviderDocUrl" href="#" target="_blank" class="provider-info-link">点击前往官方平台</a>
+                    </div>
+                    <div id="modalProviderNote" class="provider-info-note"></div>
+                </div>
+
+                <!-- API Key 输入 -->
+                <div class="form-group" style="margin-top:16px">
+                    <label>API Key <span class="required">*</span></label>
+                    <div class="api-key-input-group">
+                        <input type="password" id="modalApiKey" class="form-control"
+                            placeholder="请输入API Key" autocomplete="off">
+                        <button class="btn btn-outline api-key-toggle" onclick="toggleApiKeyVisibility()" type="button">
+                            <span id="apiKeyEye">👁</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 模型选择 -->
+                <div class="form-group">
+                    <label>选择模型</label>
+                    <select id="modalModelSelect" class="form-control">
+                        <option value="">请先选择提供商</option>
+                    </select>
+                </div>
+
+                <!-- 高级参数 -->
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <label>Temperature (创造性 0-1)</label>
+                        <input type="number" id="modalTemperature" class="form-control"
+                            value="0.3" min="0" max="1" step="0.1">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label>Max Tokens (最大长度)</label>
+                        <input type="number" id="modalMaxTokens" class="form-control"
+                            value="2048" min="256" max="8192" step="256">
+                    </div>
+                </div>
+
+                <!-- 测试结果 -->
+                <div id="modalTestResult" class="test-result" style="display:none"></div>
+
+                <!-- 底部操作 -->
+                <div class="modal-footer" style="margin-top:20px">
+                    <label class="switch-label" style="margin-right:auto">
+                        <input type="checkbox" id="modalEnabledToggle" checked>
+                        <span class="switch"></span>
+                        <span class="switch-text">保存后启用</span>
+                    </label>
+                    <button class="btn btn-outline" onclick="closeAIConfigModal()">取消</button>
+                    <button class="btn btn-outline" onclick="testLLMConnectionModal()" id="modalTestBtn">🔗 测试连接</button>
+                    <button class="btn btn-primary" onclick="saveLLMConfigModal()">💾 保存配置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
