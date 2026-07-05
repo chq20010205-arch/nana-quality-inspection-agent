@@ -14,37 +14,98 @@ PDF 规范条文提取模块（增强版）
 import re
 import io
 import json
+import threading
+import time
 
 
 # ============================================================
 # PDF 文本提取
 # ============================================================
 
+def _run_with_timeout(func, args=(), timeout=60):
+    """
+    在子线程中执行func，超时返回None。
+    防止某些PDF导致库无限阻塞。
+    """
+    result = [None]
+    error = [None]
+
+    def worker():
+        try:
+            result[0] = func(*args)
+        except Exception as e:
+            error[0] = e
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
+
+    if t.is_alive():
+        # 线程仍在运行（超时）
+        return None, TimeoutError(f"操作超时（{timeout}秒）")
+    return result[0], error[0]
+
+
 def extract_text_from_pdf(file_bytes):
     """
     从PDF文件中提取全文文本（不限页数）。
 
     尝试顺序：
-    1. PyMuPDF (fitz) - 主引擎
-    2. pypdf - 备用引擎
+    1. PyMuPDF (fitz) - 主引擎（60秒超时）
+    2. pypdf - 备用引擎（60秒超时）
     3. 扫描版检测 + 图片渲染
 
     返回:
         dict: {"text", "pages", "engine", "error", "need_ocr", "images"}
     """
-    # 尝试 PyMuPDF
-    result = _extract_with_pymupdf(file_bytes)
-    if result["text"] and len(result["text"].strip()) > 50:
+    # 尝试 PyMuPDF（带超时）
+    result, err = _run_with_timeout(_extract_with_pymupdf, (file_bytes,), timeout=60)
+    if err and isinstance(err, TimeoutError):
+        return {
+            "text": "", "pages": 0,
+            "error": "PyMuPDF提取超时，PDF可能过大或已损坏",
+            "engine": "pymupdf",
+        }
+    if err:
+        result = {"text": "", "pages": 0, "error": str(err), "engine": "pymupdf"}
+    if result and result.get("text") and len(result["text"].strip()) > 50:
         return result
 
-    # 尝试 pypdf
-    result2 = _extract_with_pypdf(file_bytes)
-    if result2["text"] and len(result2["text"].strip()) > 50:
+    # 尝试 pypdf（带超时）
+    result2, err2 = _run_with_timeout(_extract_with_pypdf, (file_bytes,), timeout=60)
+    if err2 and isinstance(err2, TimeoutError):
+        return {
+            "text": "", "pages": 0,
+            "error": "pypdf提取超时，PDF可能过大或已损坏",
+            "engine": "pypdf",
+        }
+    if err2:
+        result2 = {"text": "", "pages": 0, "error": str(err2), "engine": "pypdf"}
+    if result2 and result2.get("text") and len(result2["text"].strip()) > 50:
         return result2
 
+    # 两个引擎都提取不出足够文本
+    result = result or {}
+    result2 = result2 or {}
+
+    # 如果有PyMuPDF的错误信息，说明PyMuPDF安装了但解析失败
+    # 如果错误是"未安装"，说明依赖缺失
+    pymupdf_error = result.get("error", "")
+    pypdf_error = result2.get("error", "")
+
+    # 检查是否是依赖缺失
+    if "未安装" in pymupdf_error and "未安装" in pypdf_error:
+        return {
+            "text": "", "pages": 0,
+            "error": "服务器缺少PDF解析依赖（PyMuPDF和pypdf均未安装）。请在服务器上运行: pip install PyMuPDF pypdf",
+            "engine": "none",
+        }
+
     # 扫描版PDF，渲染图片
-    img_result = _render_pages_to_images(file_bytes, max_pages=10)
-    if img_result.get("images"):
+    img_result, img_err = _run_with_timeout(_render_pages_to_images, (file_bytes, 10), timeout=30)
+    if img_err:
+        img_result = {"images": [], "pages": 0}
+    if img_result and img_result.get("images"):
         return {
             "text": "",
             "pages": img_result["pages"],
@@ -57,7 +118,7 @@ def extract_text_from_pdf(file_bytes):
     return {
         "text": result.get("text", "") or result2.get("text", ""),
         "pages": result.get("pages", 0),
-        "error": result.get("error") or result2.get("error") or "PDF文本提取失败，文件可能已损坏",
+        "error": pymupdf_error or pypdf_error or "PDF文本提取失败，文件可能已损坏",
         "engine": "none",
     }
 

@@ -311,6 +311,18 @@ class PDFTaskManager:
             task = self._tasks.get(task_id)
             if not task:
                 return None
+
+            # 超时检测：如果任务运行超过5分钟，自动标记为失败
+            elapsed = time.time() - task["created_at"]
+            if (task["status"] in ("pending", "running")
+                    and elapsed > 300
+                    and not task.get("completed_at")):
+                task["status"] = "failed"
+                task["error"] = f"任务超时（{int(elapsed)}秒），可能服务器缺少PDF解析依赖或PDF文件过大"
+                task["stage"] = "任务超时"
+                task["completed_at"] = time.time()
+                task["cancel_event"].set()
+
             return {
                 "task_id": task["task_id"],
                 "filename": task["filename"],
@@ -320,7 +332,7 @@ class PDFTaskManager:
                 "stage": task["stage"],
                 "result": task["result"],
                 "error": task["error"],
-                "elapsed": round(time.time() - task["created_at"], 1),
+                "elapsed": round(elapsed, 1),
             }
 
     def cancel_task(self, task_id):

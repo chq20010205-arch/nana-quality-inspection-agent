@@ -1158,14 +1158,28 @@ function uploadPdfFile(file) {
 
     fetch("/api/regulations/import/pdf", {
         method: "POST",
-        body: formData
+        body: formData,
+        redirect: "follow"
     })
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+            if (!r.ok) {
+                return r.text().then(function(text) {
+                    throw new Error("HTTP " + r.status + ": " + (text.substring(0, 200) || r.statusText));
+                });
+            }
+            return r.json();
+        })
         .then(function (data) {
             if (data.error) {
                 progressDiv.style.display = "none";
                 showPdfCancelButton(false);
-                statusDiv.innerHTML = '<div class="empty-state"><p>' + data.error + '</p></div>';
+                statusDiv.innerHTML = '<div class="empty-state"><p>' + escapeHtml(data.error) + '</p></div>';
+                return;
+            }
+            if (!data.task_id) {
+                progressDiv.style.display = "none";
+                showPdfCancelButton(false);
+                statusDiv.innerHTML = '<div class="empty-state"><p>服务器未返回任务ID，请检查服务是否正常</p></div>';
                 return;
             }
             // 收到task_id，开始轮询
@@ -1188,15 +1202,34 @@ function pollPdfTaskProgress(taskId, mode) {
     // 清除之前的定时器
     if (pdfPollTimer) clearTimeout(pdfPollTimer);
 
+    var pollCount = 0;
+    var maxPolls = 400; // 最多轮询400次（约5分钟，每800ms一次）
+
     function poll() {
-        fetch("/api/pdf/task/" + taskId)
-            .then(function (r) { return r.json(); })
+        pollCount++;
+        if (pollCount > maxPolls) {
+            progressDiv.style.display = "none";
+            showPdfCancelButton(false);
+            document.getElementById("pdfUploadStatus").innerHTML =
+                '<div class="empty-state"><p>解析超时，请尝试使用较小的PDF文件或检查服务器配置</p></div>';
+            currentPdfTaskId = null;
+            showToast("解析超时", "error");
+            return;
+        }
+
+        fetch("/api/pdf/task/" + taskId, { redirect: "follow" })
+            .then(function (r) {
+                if (!r.ok) {
+                    throw new Error("HTTP " + r.status);
+                }
+                return r.json();
+            })
             .then(function (task) {
-                if (task.error) {
+                if (task.error && !task.status) {
                     progressDiv.style.display = "none";
                     showPdfCancelButton(false);
                     document.getElementById("pdfUploadStatus").innerHTML =
-                        '<div class="empty-state"><p>' + task.error + '</p></div>';
+                        '<div class="empty-state"><p>' + escapeHtml(task.error) + '</p></div>';
                     currentPdfTaskId = null;
                     return;
                 }

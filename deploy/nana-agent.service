@@ -1,0 +1,22 @@
+[Unit]
+Description=Nana Quality Inspection Agent (Flask + Gunicorn)
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/opt/nana-agent
+Environment="PATH=/opt/nana-agent/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/nana-agent/venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:5000 \
+    --timeout 120 \
+    --access-logfile /var/log/nana-agent/access.log \
+    --error-logfile /var/log/nana-agent/error.log \
+    app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
