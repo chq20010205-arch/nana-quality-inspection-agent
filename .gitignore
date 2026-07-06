@@ -27,3 +27,6 @@ Thumbs.db
 *.log
 .vercel
 .env*
+
+# Local secret scratch files
+.file_admin_token.tmp
