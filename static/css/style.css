@@ -10,6 +10,157 @@
     box-sizing: border-box;
 }
 
+/* ===== 私有文件库 ===== */
+.file-library-card {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.file-library-subtitle {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.file-auth-panel {
+    max-width: 520px;
+    margin: 40px auto;
+    padding: 34px;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, #fffaf7, #fff3f4);
+}
+
+.file-auth-icon {
+    font-size: 42px;
+    margin-bottom: 10px;
+}
+
+.file-auth-panel h3 {
+    margin: 0 0 8px;
+}
+
+.file-auth-panel p {
+    margin: 0 0 20px;
+    color: var(--text-secondary);
+}
+
+.file-auth-form {
+    display: flex;
+    gap: 10px;
+}
+
+.file-auth-form .form-control {
+    flex: 1;
+}
+
+.file-upload-toolbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: var(--radius);
+    background: var(--cream-dark);
+}
+
+.file-picker {
+    flex: 1;
+}
+
+.file-size-hint {
+    display: block;
+    margin-top: 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.file-category-select {
+    width: 150px;
+}
+
+.file-storage-summary {
+    margin-bottom: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.file-list {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: white;
+}
+
+.file-row:last-child {
+    border-bottom: none;
+}
+
+.file-row:hover {
+    background: #fffaf8;
+}
+
+.file-row-icon {
+    flex: 0 0 auto;
+    font-size: 24px;
+}
+
+.file-row-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.file-row-name {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-row-meta {
+    margin-top: 3px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.file-row-actions {
+    display: flex;
+    gap: 8px;
+}
+
+@media (max-width: 720px) {
+    .file-auth-form,
+    .file-upload-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .file-category-select {
+        width: 100%;
+    }
+
+    .file-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .file-row-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
 :root {
     /* 奶油暖色系 - 更柔和更可爱 */
     --cream: #fef9f6;

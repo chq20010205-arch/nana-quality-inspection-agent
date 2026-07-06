@@ -60,6 +60,9 @@
             <button class="tab-btn" data-tab="database">
                 <span class="tab-icon">📚</span> 规章制度库
             </button>
+            <button class="tab-btn" data-tab="files">
+                <span class="tab-icon">🗂️</span> 文件库
+            </button>
             <button class="tab-btn" data-tab="notice">
                 <span class="tab-icon">🍰</span> 通知书生成
             </button>
@@ -442,6 +445,57 @@
                     </div>
                 </div>
             </div>
+            <!-- 私有文件库 Tab -->
+            <section class="tab-panel" id="tab-files">
+                <div class="card file-library-card">
+                    <div class="card-header">
+                        <div>
+                            <h2>🗂️ 后台文件库</h2>
+                            <p class="file-library-subtitle">文件存储在私有 Vercel Blob 中，仅持有管理员口令的人员可以访问。</p>
+                        </div>
+                        <div class="header-actions">
+                            <button class="btn btn-sm btn-outline" onclick="loadStoredFiles()">刷新</button>
+                            <button class="btn btn-sm btn-outline" onclick="disconnectFileStorage()">退出文件库</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="file-auth-panel" id="fileAuthPanel">
+                            <div class="file-auth-icon">🔐</div>
+                            <h3>管理员验证</h3>
+                            <p>请输入文件库管理员口令。口令只保存在当前浏览器会话中。</p>
+                            <div class="file-auth-form">
+                                <input type="password" id="fileAdminTokenInput" class="form-control"
+                                    placeholder="管理员口令"
+                                    onkeydown="if(event.key==='Enter')connectFileStorage()">
+                                <button class="btn btn-primary" onclick="connectFileStorage()">进入文件库</button>
+                            </div>
+                        </div>
+
+                        <div id="fileManagerPanel" style="display:none">
+                            <div class="file-upload-toolbar">
+                                <div class="file-picker">
+                                    <input type="file" id="storedFileInput" class="form-control">
+                                    <span class="file-size-hint">单个文件最大 4MB</span>
+                                </div>
+                                <select id="storedFileCategory" class="form-control file-category-select">
+                                    <option value="regulations">规范文件</option>
+                                    <option value="inspection">现场资料</option>
+                                    <option value="notices">整改通知书</option>
+                                    <option value="documents">其他文件</option>
+                                </select>
+                                <button class="btn btn-primary" id="storedFileUploadBtn" onclick="uploadStoredFile()">
+                                    上传并保存
+                                </button>
+                            </div>
+                            <div class="file-storage-summary" id="fileStorageSummary"></div>
+                            <div class="file-list" id="storedFileList">
+                                <div class="loading-state">正在加载文件...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section class="tab-panel" id="tab-ai">
                 <div class="panel-grid">
                     <!-- 左侧：LLM配置 -->

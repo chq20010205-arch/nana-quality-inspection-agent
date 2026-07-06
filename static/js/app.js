@@ -13,6 +13,7 @@ let pendingReviewData = null;
 let searchedRegulation = null;
 let pdfRegulation = null;
 let manualRegulation = null;
+let fileAdminToken = sessionStorage.getItem("nanaFileAdminToken") || "";
 
 // ===== 初始化 =====
 document.addEventListener("DOMContentLoaded", function () {
@@ -21,6 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
     loadRegulations();
     loadLLMProviders();
     loadLLMConfig();
+    initFileStorage();
     // 设置默认日期为今天
     document.getElementById("inspectionDate").value = new Date().toISOString().split("T")[0];
 });
@@ -38,6 +40,9 @@ function initTabs() {
             });
             this.classList.add("active");
             document.getElementById("tab-" + target).classList.add("active");
+            if (target === "files" && fileAdminToken) {
+                loadStoredFiles();
+            }
         });
     });
 }
@@ -2572,6 +2577,212 @@ function aiPolishNotice() {
             btn.disabled = false;
             btn.textContent = "🤖 AI润色";
         });
+}
+
+// ===== 私有文件库 =====
+function initFileStorage() {
+    var authPanel = document.getElementById("fileAuthPanel");
+    var managerPanel = document.getElementById("fileManagerPanel");
+    if (!authPanel || !managerPanel) return;
+    authPanel.style.display = fileAdminToken ? "none" : "block";
+    managerPanel.style.display = fileAdminToken ? "block" : "none";
+}
+
+function connectFileStorage() {
+    var input = document.getElementById("fileAdminTokenInput");
+    var token = input.value.trim();
+    if (!token) {
+        showToast("请输入管理员口令", "error");
+        return;
+    }
+    fileAdminToken = token;
+    sessionStorage.setItem("nanaFileAdminToken", token);
+    input.value = "";
+    initFileStorage();
+    loadStoredFiles(true);
+}
+
+function disconnectFileStorage() {
+    fileAdminToken = "";
+    sessionStorage.removeItem("nanaFileAdminToken");
+    initFileStorage();
+    document.getElementById("storedFileList").innerHTML =
+        '<div class="empty-state"><p>请先输入管理员口令</p></div>';
+}
+
+function fileApiFetch(url, options) {
+    options = options || {};
+    options.headers = options.headers || {};
+    options.headers["X-Admin-Token"] = fileAdminToken;
+    return fetch(url, options);
+}
+
+function loadStoredFiles(showConnectedToast) {
+    if (!fileAdminToken) {
+        initFileStorage();
+        return;
+    }
+    var list = document.getElementById("storedFileList");
+    list.innerHTML = '<div class="loading-state">正在加载文件...</div>';
+
+    fileApiFetch("/api/files?limit=100")
+        .then(function (response) {
+            return response.json().then(function (data) {
+                return { ok: response.ok, status: response.status, data: data };
+            });
+        })
+        .then(function (result) {
+            if (!result.ok) {
+                if (result.status === 401) disconnectFileStorage();
+                throw new Error(result.data.error || "文件列表加载失败");
+            }
+            renderStoredFiles(result.data.files || []);
+            if (showConnectedToast) showToast("文件库已连接", "success");
+        })
+        .catch(function (error) {
+            list.innerHTML = '<div class="empty-state"><p>' +
+                escapeHtml(error.message) + '</p></div>';
+            showToast(error.message, "error");
+        });
+}
+
+function renderStoredFiles(files) {
+    var list = document.getElementById("storedFileList");
+    var summary = document.getElementById("fileStorageSummary");
+    var totalSize = files.reduce(function (total, file) {
+        return total + (file.size || 0);
+    }, 0);
+    summary.textContent = "共 " + files.length + " 个文件 · " + formatFileSize(totalSize);
+
+    if (!files.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon">🗂️</div>' +
+            '<p>文件库还是空的</p><p class="empty-hint">选择文件后点击“上传并保存”</p></div>';
+        return;
+    }
+
+    list.innerHTML = files.map(function (file) {
+        var encodedPath = encodeURIComponent(file.pathname);
+        var encodedName = encodeURIComponent(file.filename || "下载文件");
+        var uploadedAt = file.uploaded_at
+            ? new Date(file.uploaded_at).toLocaleString("zh-CN")
+            : "—";
+        return '<div class="file-row">' +
+            '<div class="file-row-icon">📄</div>' +
+            '<div class="file-row-main">' +
+                '<div class="file-row-name">' + escapeHtml(file.filename || file.pathname) + '</div>' +
+                '<div class="file-row-meta">' + formatFileSize(file.size || 0) +
+                ' · ' + escapeHtml(uploadedAt) + '</div>' +
+            '</div>' +
+            '<div class="file-row-actions">' +
+                '<button class="btn btn-xs btn-outline" onclick="downloadStoredFile(\'' +
+                encodedPath + '\',\'' + encodedName + '\')">下载</button>' +
+                '<button class="btn btn-xs btn-danger" onclick="deleteStoredFile(\'' +
+                encodedPath + '\')">删除</button>' +
+            '</div>' +
+        '</div>';
+    }).join("");
+}
+
+function uploadStoredFile() {
+    var input = document.getElementById("storedFileInput");
+    var file = input.files && input.files[0];
+    if (!file) {
+        showToast("请选择文件", "error");
+        return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+        showToast("在线上传单个文件不能超过 4MB", "error");
+        return;
+    }
+
+    var button = document.getElementById("storedFileUploadBtn");
+    var formData = new FormData();
+    formData.append("file", file);
+    formData.append("category", document.getElementById("storedFileCategory").value);
+    button.disabled = true;
+    button.textContent = "上传中...";
+
+    fileApiFetch("/api/files", { method: "POST", body: formData })
+        .then(function (response) {
+            return response.json().then(function (data) {
+                if (!response.ok) throw new Error(data.error || "上传失败");
+                return data;
+            });
+        })
+        .then(function () {
+            input.value = "";
+            showToast("文件已安全保存", "success");
+            loadStoredFiles();
+        })
+        .catch(function (error) {
+            showToast(error.message, "error");
+        })
+        .finally(function () {
+            button.disabled = false;
+            button.textContent = "上传并保存";
+        });
+}
+
+function downloadStoredFile(encodedPath, encodedName) {
+    var pathname = decodeURIComponent(encodedPath);
+    var filename = decodeURIComponent(encodedName);
+    var url = "/api/files/download?pathname=" + encodeURIComponent(pathname);
+
+    fileApiFetch(url)
+        .then(function (response) {
+            if (!response.ok) {
+                return response.json().then(function (data) {
+                    throw new Error(data.error || "下载失败");
+                });
+            }
+            return response.blob();
+        })
+        .then(function (blob) {
+            var objectUrl = URL.createObjectURL(blob);
+            var link = document.createElement("a");
+            link.href = objectUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+            showToast("文件已下载", "success");
+        })
+        .catch(function (error) {
+            showToast(error.message, "error");
+        });
+}
+
+function deleteStoredFile(encodedPath) {
+    var pathname = decodeURIComponent(encodedPath);
+    if (!confirm("确定要永久删除这个文件吗？")) return;
+
+    fileApiFetch("/api/files", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pathname: pathname })
+    })
+        .then(function (response) {
+            return response.json().then(function (data) {
+                if (!response.ok) throw new Error(data.error || "删除失败");
+                return data;
+            });
+        })
+        .then(function () {
+            showToast("文件已删除", "success");
+            loadStoredFiles();
+        })
+        .catch(function (error) {
+            showToast(error.message, "error");
+        });
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return "0 B";
+    var units = ["B", "KB", "MB", "GB"];
+    var index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    var value = bytes / Math.pow(1024, index);
+    return value.toFixed(index === 0 ? 0 : 1) + " " + units[index];
 }
 
 function showToast(msg, type) {

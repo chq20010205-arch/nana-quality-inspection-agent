@@ -15,11 +15,15 @@ import os
 import re
 import sqlite3
 import hashlib
+import hmac
+import io
 import uuid
 import threading
 import time
 from datetime import datetime
+from functools import wraps
 from flask import Flask, request, jsonify, render_template, send_file, Response
+from db_adapter import DatabaseConnectionFactory, DatabaseIntegrityError
 
 # LLM 适配器
 from llm_adapter import LLMAdapter, PROVIDER_PRESETS
@@ -27,17 +31,52 @@ from llm_adapter import LLMAdapter, PROVIDER_PRESETS
 # 网络搜索与PDF解析
 from web_search import search_legal_provisions, parse_search_results_to_regulation, fetch_page_text
 from pdf_parser import extract_text_from_pdf, parse_pdf_text_to_regulation, ocr_pdf_images, parse_pdf_full_deep, smart_chunk_text
+from file_storage import FileStorage, FileStorageError
 
 # ==============================================================================
 # 路径配置
 # ==============================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-DB_PATH = os.path.join(BASE_DIR, "regulations.db")
 REGULATIONS_JSON = os.path.join(DATA_DIR, "regulations.json")
+DATABASE_URL = (
+    os.environ.get("DATABASE_URL")
+    or os.environ.get("POSTGRES_URL")
+    or os.environ.get("POSTGRES_PRISMA_URL")
+    or os.environ.get("POSTGRES_URL_NON_POOLING")
+)
+
+# Vercel serverless functions run from a read-only /var/task directory.
+# Keep mutable runtime files in /tmp there, while preserving the existing
+# local-development paths everywhere else.
+if DATABASE_URL:
+    DB_PATH = DATABASE_URL
+    LLM_CONFIG_PATH = os.path.join(DATA_DIR, "llm_config.json")
+elif os.environ.get("VERCEL"):
+    RUNTIME_DIR = os.environ.get(
+        "NANA_RUNTIME_DIR", "/tmp/nana-quality-inspection-agent"
+    )
+    os.makedirs(RUNTIME_DIR, exist_ok=True)
+    DB_PATH = os.path.join(RUNTIME_DIR, "regulations.db")
+    LLM_CONFIG_PATH = os.path.join(RUNTIME_DIR, "llm_config.json")
+else:
+    DB_PATH = os.path.join(BASE_DIR, "regulations.db")
+    LLM_CONFIG_PATH = os.path.join(DATA_DIR, "llm_config.json")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 限制上传50MB
+
+
+def require_file_admin(func):
+    """Protect file-management APIs with a server-side admin token."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        expected = os.environ.get("FILE_ADMIN_TOKEN", "")
+        provided = request.headers.get("X-Admin-Token", "")
+        if not expected or not provided or not hmac.compare_digest(expected, provided):
+            return jsonify({"error": "文件库管理员口令无效"}), 401
+        return func(*args, **kwargs)
+    return wrapper
 
 
 # ==============================================================================
@@ -371,13 +410,12 @@ class RegulationDB:
 
     def __init__(self, db_path):
         self.db_path = db_path
+        self.connection_factory = DatabaseConnectionFactory(db_path)
+        self.using_postgres = self.connection_factory.using_postgres
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        return self.connection_factory.connect()
 
     def _init_db(self):
         conn = self._get_conn()
@@ -427,7 +465,36 @@ class RegulationDB:
                 problems      TEXT,
                 created_at    TEXT DEFAULT (datetime('now','localtime'))
             );
+
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key           TEXT PRIMARY KEY,
+                value         TEXT,
+                updated_at    TEXT DEFAULT (datetime('now','localtime'))
+            );
         """)
+        conn.commit()
+        conn.close()
+
+    def get_setting(self, key):
+        """获取应用设置。"""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = ?", (key,)
+        ).fetchone()
+        conn.close()
+        return row["value"] if row else None
+
+    def set_setting(self, key, value):
+        """保存应用设置。"""
+        conn = self._get_conn()
+        conn.execute(
+            """INSERT INTO app_settings (key, value, updated_at)
+               VALUES (?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(key) DO UPDATE SET
+                   value = excluded.value,
+                   updated_at = CURRENT_TIMESTAMP""",
+            (key, value),
+        )
         conn.commit()
         conn.close()
 
@@ -549,7 +616,7 @@ class RegulationDB:
             conn.commit()
             conn.close()
             return reg_id
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, DatabaseIntegrityError):
             conn.close()
             return None
 
@@ -1012,7 +1079,7 @@ class RegulationMatcher:
 # ==============================================================================
 db = RegulationDB(DB_PATH)
 matcher = RegulationMatcher(db)
-llm = LLMAdapter()
+llm = LLMAdapter(config_path=LLM_CONFIG_PATH, config_store=db)
 
 # 自动加载预置数据
 if os.path.exists(REGULATIONS_JSON):
@@ -1034,6 +1101,75 @@ else:
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/files", methods=["GET", "POST", "DELETE"])
+@require_file_admin
+def api_files():
+    """List, upload, or delete files in the private Vercel Blob store."""
+    try:
+        if request.method == "GET":
+            return jsonify(FileStorage.list_files(
+                limit=request.args.get("limit", 100),
+                cursor=request.args.get("cursor"),
+            ))
+
+        if request.method == "DELETE":
+            data = request.get_json(silent=True) or {}
+            pathname = data.get("pathname", "")
+            FileStorage.delete(pathname)
+            return jsonify({"message": "文件已删除", "pathname": pathname})
+
+        if "file" not in request.files:
+            return jsonify({"error": "请选择要上传的文件"}), 400
+
+        uploaded = request.files["file"]
+        if not uploaded.filename:
+            return jsonify({"error": "文件名不能为空"}), 400
+
+        content = uploaded.read()
+        max_size = 4 * 1024 * 1024 if os.environ.get("VERCEL") else 50 * 1024 * 1024
+        if len(content) > max_size:
+            return jsonify({
+                "error": "Vercel 在线上传单个文件不能超过 4MB"
+                if os.environ.get("VERCEL")
+                else "单个文件不能超过 50MB"
+            }), 413
+
+        result = FileStorage.upload(
+            uploaded.filename,
+            content,
+            content_type=uploaded.mimetype,
+            category=request.form.get("category", "documents"),
+        )
+        return jsonify({"message": "文件已安全保存", "file": result}), 201
+    except FileStorageError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except Exception as exc:
+        app.logger.exception("File storage operation failed")
+        return jsonify({"error": f"文件存储操作失败：{exc}"}), 500
+
+
+@app.route("/api/files/download", methods=["GET"])
+@require_file_admin
+def api_file_download():
+    """Proxy a private Blob through the authenticated application."""
+    try:
+        pathname = request.args.get("pathname", "")
+        result = FileStorage.download(pathname)
+        filename = FileStorage._safe_name(FileStorage.display_name(result.pathname))
+        return send_file(
+            io.BytesIO(result.content),
+            mimetype=result.content_type or "application/octet-stream",
+            as_attachment=True,
+            download_name=filename,
+            max_age=0,
+        )
+    except FileStorageError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("File download failed")
+        return jsonify({"error": f"文件下载失败：{exc}"}), 500
 
 
 @app.route("/api/match", methods=["POST"])

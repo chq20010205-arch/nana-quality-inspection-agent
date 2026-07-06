@@ -81,10 +81,11 @@ PROVIDER_PRESETS = {
 class LLMAdapter:
     """多LLM统一适配器"""
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, config_store=None):
         self.config_path = config_path or os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "data", "llm_config.json"
         )
+        self.config_store = config_store
         self.config = self._load_config()
 
     # ==========================================================================
@@ -100,6 +101,15 @@ class LLMAdapter:
             "max_tokens": 2048,
             "enabled": False,
         }
+        if self.config_store:
+            try:
+                saved = self.config_store.get_setting("llm_config")
+                if saved:
+                    default_config.update(json.loads(saved))
+                    return default_config
+            except Exception:
+                pass
+
         if os.path.exists(self.config_path):
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
@@ -111,6 +121,12 @@ class LLMAdapter:
 
     def _save_config(self):
         """保存配置到文件"""
+        if self.config_store:
+            self.config_store.set_setting(
+                "llm_config", json.dumps(self.config, ensure_ascii=False)
+            )
+            return
+
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.config, f, ensure_ascii=False, indent=2)

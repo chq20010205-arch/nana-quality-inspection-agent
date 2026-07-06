@@ -34,6 +34,16 @@ python app.py
 
 或双击 `run.bat` 一键启动（Windows）。
 
+## Vercel 上线配置
+
+这个项目在 Vercel 上使用 `app.py` 作为 Python Serverless 入口。上线前请在 Vercel 项目的 Storage 中创建并连接：
+
+1. Postgres/Neon 数据库：确保项目环境变量中存在 `DATABASE_URL` 或 `POSTGRES_URL`。规章制度、通知记录和大模型配置会持久化到这个数据库。
+2. Blob 文件库：创建 Private Blob store，确保项目环境变量中存在 `BLOB_READ_WRITE_TOKEN`。
+3. 管理员口令：手动添加 `FILE_ADMIN_TOKEN`，前端“后台文件库”会用它校验上传、下载和删除操作。
+
+如果没有配置 Postgres，线上会临时退回 `/tmp` SQLite，只适合测试，冷启动或重新部署后数据可能丢失。
+
 ## 📁 项目结构
 
 ```
