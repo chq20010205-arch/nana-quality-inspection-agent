@@ -14,6 +14,8 @@ let searchedRegulation = null;
 let pdfRegulation = null;
 let manualRegulation = null;
 let fileAdminToken = sessionStorage.getItem("nanaFileAdminToken") || "";
+const ONLINE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024;
+const ONLINE_UPLOAD_LIMIT_LABEL = "10MB";
 
 // ===== 初始化 =====
 document.addEventListener("DOMContentLoaded", function () {
@@ -1133,6 +1135,10 @@ let pdfPollTimer = null;
 function uploadPdfFile(file) {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
         showToast("仅支持PDF文件", "error");
+        return;
+    }
+    if (file.size > ONLINE_UPLOAD_LIMIT_BYTES) {
+        showToast("单个PDF文件不能超过 " + ONLINE_UPLOAD_LIMIT_LABEL, "error");
         return;
     }
 
@@ -2690,8 +2696,8 @@ function uploadStoredFile() {
         showToast("请选择文件", "error");
         return;
     }
-    if (file.size > 4 * 1024 * 1024) {
-        showToast("在线上传单个文件不能超过 4MB", "error");
+    if (file.size > ONLINE_UPLOAD_LIMIT_BYTES) {
+        showToast("在线上传单个文件不能超过 " + ONLINE_UPLOAD_LIMIT_LABEL, "error");
         return;
     }
 

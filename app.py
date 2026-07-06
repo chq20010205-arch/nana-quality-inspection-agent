@@ -39,6 +39,8 @@ from file_storage import FileStorage, FileStorageError
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 REGULATIONS_JSON = os.path.join(DATA_DIR, "regulations.json")
+ONLINE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024
+ONLINE_UPLOAD_LIMIT_LABEL = "10MB"
 DATABASE_URL = (
     os.environ.get("DATABASE_URL")
     or os.environ.get("POSTGRES_URL")
@@ -1128,10 +1130,10 @@ def api_files():
             return jsonify({"error": "文件名不能为空"}), 400
 
         content = uploaded.read()
-        max_size = 4 * 1024 * 1024 if os.environ.get("VERCEL") else 50 * 1024 * 1024
+        max_size = ONLINE_UPLOAD_LIMIT_BYTES if os.environ.get("VERCEL") else 50 * 1024 * 1024
         if len(content) > max_size:
             return jsonify({
-                "error": "Vercel 在线上传单个文件不能超过 4MB"
+                "error": f"Vercel 在线上传单个文件不能超过 {ONLINE_UPLOAD_LIMIT_LABEL}"
                 if os.environ.get("VERCEL")
                 else "单个文件不能超过 50MB"
             }), 413
@@ -1492,6 +1494,11 @@ def api_import_pdf():
         return jsonify({"error": "仅支持PDF文件"}), 400
 
     file_bytes = file.read()
+    if len(file_bytes) > ONLINE_UPLOAD_LIMIT_BYTES:
+        return jsonify({
+            "error": f"单个PDF文件不能超过 {ONLINE_UPLOAD_LIMIT_LABEL}"
+        }), 413
+
     mode = request.form.get("mode", "normal")
     use_ocr = mode == "ocr" or request.form.get("use_ocr", "false").lower() == "true"
 
